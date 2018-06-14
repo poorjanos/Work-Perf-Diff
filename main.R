@@ -1,4 +1,11 @@
 # Procedure to compare performance to historical data on an hourly basis
+#   
+#   The performance of the current hour is compared to the average performance of previous 
+#   hours most similar to current hour
+#   
+#   Similar previous hours determined with Euclidean distances based on times spent by users
+#   on different tasks
+
 
 # Redirect stdout to logfile
 scriptLog <- file("scriptLog", open = "wt")
@@ -17,6 +24,11 @@ stopifnot(!(strftime(Sys.Date(), '%u') == 7 | hour(Sys.time()) >= 18))
 # Create default dirs
 dir.create(here::here("Reports"), showWarnings = FALSE)
 dir.create(here::here("SQL"), showWarnings = FALSE)
+dir.create(here::here("R"), showWarnings = FALSE)
+dir.create(here::here("Data"), showWarnings = FALSE)
+
+# Import helper funcs
+source(here::here("R", "data_manipulation.R"))
 
 ##########################################################################################
 # Extract Data ###########################################################################
@@ -64,25 +76,14 @@ dbDisconnect(jdbcConnection)
 # Data Transformation ###################################################################
 #########################################################################################
 
-# Gen hourly aggregates
-t_hour <- t_prop_pace %>%
-  mutate(
-    NAP = floor_date(ymd_hms(F_INT_BEGIN), "day"),
-    ZART_ORA = hour(ymd_hms(ZART_ORA)),
-    LOGIN_TERM = paste0(LOGIN, "_", F_TERMCSOP)) %>%
-  group_by(NAP, ZART_ORA, LOGIN_TERM, POOL) %>%
-  summarize(IDO = sum(CKLIDO)) %>%
-  ungroup() %>%
-  arrange(NAP, ZART_ORA, LOGIN_TERM)
+# Gen vector space for current hour
+t_hour_vectors <- gen_vector_space_by_activity(t_prop_pace)
+
+# Get most similar days
+t_similar_days <- get_similar_days(t_hour_vectors, 10)
 
 
-# Filter for current hour
-t_hour_curr <- t_hour %>% 
-                filter(ZART_ORA == hour(Sys.time())) %>% 
-                select(-ZART_ORA) 
 
 
-# Gen vector space
-t_vec <-  t_hour_curr %>% tidyr::spread(LOGIN_TERM, IDO) 
 
 
